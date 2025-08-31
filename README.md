@@ -2,6 +2,17 @@
 ## Overview
 A comprehensive billing system for managing dynamic loan products with flexible repayment schedules. The system supports configurable loan terms, payment frequencies (weekly/monthly), and automated delinquency tracking through schedulers. **This service focuses purely on billing operations and does not perform customer validation - it processes loan requests as received from downstream services.**
 
+## Architecture Design 
+<img width="1616" height="723" alt="image" src="https://github.com/user-attachments/assets/9d78a514-004a-4e9f-baa5-8ec5197f4c56" />
+
+### Current Architecture
+The current solution is fairly simple: downstream services make direct REST API calls to the billing engine, which billing engine then do disbursement/repayment populating or retrieves data to loan summary or repayment schedule tables.
+### Future Enhancement
+We're applying a fan-out strategy where downstream services produce disbursement and repayment data to dedicated Kafka topics. The billing engine can then process each loan disbursement and repayment event in parallel. Horizontal scaling of the billing engine is straightforward—by increasing the number of consumers (i.e., billing engine pods) within the Kubernetes cluster, we can efficiently handle higher loads.
+
+## Potential Bottlenecks and mitigations
+Loan summary and repayment schedule data are expected to grow significantly, which could lead to performance degradation in the underlying tables. To mitigate read load, we can introduce a read-only replica + partition to handle read requests. Additionally, housekeeping for paid-off loans can be made more efficient by streaming this data to the data lake, allowing us to periodically clean up the two tables
+
 ## Quick Start
 
 ### Prerequisites
