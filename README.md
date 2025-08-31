@@ -62,125 +62,108 @@ You can override these by setting environment variables before running make comm
 ## Business Rules
 ### Loan Structure (Dynamic)
 - **Principal Amount**: Configurable per loan (amount disbursed to customer)
-- **Interest Amount**: Configurable per loan
+- **Interest Rate**: Configurable per loan (decimal, e.g., 0.10 for 10%)
+- **Interest Amount**: Calculated as principal_amount × interest_rate
 - **Loan Duration**: Configurable number of installments
 - **Payment Frequency**: Weekly or Monthly
 - **Installment Amount**: (Principal + Interest) ÷ Number of Installments
+- **Outstanding Amount**: Tracked centrally in loan_summaries table
 
 ### Payment Rules
-- Borrowers must pay exact amounts to cover overdue installments
-- Payments must cover ALL outstanding/overdue installments
-- Partial payments are rejected
-- Payments are applied to oldest outstanding installments first
+- **Exact Payment Enforcement**: Borrowers must pay exact amounts only
+- **Overdue Payment Priority**: If overdue installments exist, customer must pay ALL overdue installments at once
+- **Next Installment Payment**: If no overdue installments, customer can pay exactly one next pending installment
+- **No Partial Payments**: All payments must match required amounts exactly
+- **Payment Tracking**: installment_paid field tracks payment status per installment
 
 ### Delinquency Rules
-- 2 Overdue repayments
+- **Overdue Definition**: installment_due_date < current_date AND status = 'PENDING'
+- **Status-Based Tracking**: Uses installment status (PENDING/PAID) for payment tracking
 
 ## Database Design (ERD)
 ```mermaid
 erDiagram
     users {
-        BIGINT id PK
-        VARCHAR customer_id UK
-        VARCHAR name
-        VARCHAR email
-        VARCHAR phone
+        INT id PK
+        VARCHAR customer_id UK "36 chars"
+        VARCHAR name "255 chars"
+        VARCHAR email "255 chars"
+        VARCHAR phone "50 chars"
         TIMESTAMP created_at
         TIMESTAMP updated_at
         TIMESTAMP deleted_at
     }
 
     disbursement_details {
-        BIGINT id PK
-        VARCHAR loan_id UK
-        VARCHAR customer_id
-        TIMESTAMP disbursement_date
-        DECIMAL disbursed_amount
-        CHAR disbursed_currency
-        VARCHAR status
+        INT id PK
+        VARCHAR loan_id UK "50 chars"
+        VARCHAR customer_id "36 chars"
+        DATE disbursement_date
+        DECIMAL disbursed_amount "15,2"
+        CHAR disbursed_currency "3 chars, default IDR"
+        VARCHAR status "100 chars"
         TIMESTAMP created_at
-        VARCHAR created_by
+        VARCHAR created_by "255 chars"
         TIMESTAMP updated_at
-        VARCHAR updated_by
+        VARCHAR updated_by "255 chars"
         TIMESTAMP deleted_at
     }
 
     loan_summaries {
-        BIGINT id PK
-        VARCHAR loan_id UK
-        VARCHAR customer_id
-        DECIMAL principal_amount
-        DECIMAL interest_amount
-        DECIMAL outstanding_amount
+        INT id PK
+        VARCHAR loan_id UK "50 chars"
+        VARCHAR customer_id "36 chars"
+        DECIMAL principal_amount "15,2"
+        DECIMAL interest_amount "15,2"
+        DECIMAL outstanding_amount "15,2"
         INT no_of_installment
-        VARCHAR installment_unit
-        DECIMAL installment_amount
-        DECIMAL effective_interest_rate
-        INT dpd
-        VARCHAR collectability
-        VARCHAR status
+        VARCHAR installment_unit "100 chars"
+        DECIMAL installment_amount "15,2"
+        DECIMAL effective_interest_rate "5,4"
+        VARCHAR status "100 chars"
         DATE loan_start_date
         TIMESTAMP created_at
-        VARCHAR created_by
+        VARCHAR created_by "255 chars"
         TIMESTAMP updated_at
-        VARCHAR updated_by
+        VARCHAR updated_by "255 chars"
         TIMESTAMP deleted_at
     }
 
-    payment_schedule {
-        BIGINT id PK
-        VARCHAR loan_id
+    payment_schedules {
+        INT id PK
+        VARCHAR loan_id "50 chars"
         INT installment_number
-        DECIMAL installment_amount
+        DECIMAL installment_amount "15,2"
         DATE installment_due_date
-        DECIMAL outstanding_amount
-        DECIMAL principal_amount
-        DECIMAL principal_paid
-        DECIMAL principal_written_off
-        DECIMAL interest_amount
-        DECIMAL interest_accrued
-        DECIMAL interest_paid
-        DECIMAL interest_waived_off
-        VARCHAR status
-        CHAR currency
-        INT dpd
+        DECIMAL installment_paid "15,2, default 0"
+        VARCHAR status "100 chars, default PENDING"
+        CHAR currency "3 chars, default IDR"
         TIMESTAMP created_at
-        VARCHAR created_by
+        VARCHAR created_by "255 chars"
         TIMESTAMP updated_at
-        VARCHAR updated_by
+        VARCHAR updated_by "255 chars"
         TIMESTAMP deleted_at
-        VARCHAR deleted_by
+        VARCHAR deleted_by "255 chars"
     }
 
-    payment_schedule_history {
-        BIGINT id PK
-        BIGINT schedule_id
-        VARCHAR loan_id
-        VARCHAR action
+    payment_schedule_histories {
+        INT id PK
+        INT schedule_id
+        VARCHAR loan_id "50 chars"
+        VARCHAR action "100 chars"
         INT installment_number
-        DECIMAL installment_amount
+        DECIMAL installment_amount "15,2"
         DATE installment_due_date
-        DECIMAL outstanding_amount
-        DECIMAL principal_amount
-        DECIMAL principal_paid
-        DECIMAL principal_written_off
-        DECIMAL interest_amount
-        DECIMAL interest_accrued
-        DECIMAL interest_paid
-        DECIMAL interest_waived_off
-        VARCHAR status
-        CHAR currency
-        INT dpd
+        VARCHAR status "100 chars"
+        CHAR currency "3 chars, default IDR"
         TIMESTAMP created_at
-        VARCHAR created_by
+        VARCHAR created_by "255 chars"
     }
 
-    loan_summaries ||--|| disbursement_details : "loan_id"
-    payment_schedule }o--|| disbursement_details : "loan_id"
-    payment_schedule_history }o--|| payment_schedule : "schedule_id"
-    payment_schedule_history }o--|| disbursement_details : "loan_id"
-    users ||--o{ disbursement_details : "customer_id (optional)"
-    users ||--o{ loan_summaries : "customer_id (optional)"
+    users ||--o{ disbursement_details : "customer_id"
+    disbursement_details ||--|| loan_summaries : "loan_id"
+    loan_summaries ||--o{ payment_schedules : "loan_id"
+    payment_schedules ||--o{ payment_schedule_histories : "schedule_id"
 ```
 ## Database Schema
 ### 1. Users Table ( For Reference Only)
@@ -313,10 +296,10 @@ CREATE INDEX idx_payment_schedule_histories_created_at ON payment_schedule_histo
 ```json
 {
   "principal_amount": 5000000.00,
-  "interest_amount": 500000.00,
+  "interest_rate": 0.10,
   "installment_unit": "week",
   "number_of_installment": 50,
-  "start_date": "2025-08-31T11:43:00",
+  "start_date": "2025-08-31T11:43:00Z",
   "customer_id": "12312312"
 }
 ```
@@ -332,19 +315,22 @@ CREATE INDEX idx_payment_schedule_histories_created_at ON payment_schedule_histo
     "outstanding_amount": 5500000.00,
     "installment_unit": "week",
     "number_of_installment": 50,
-    "disbursement_date": "2025-08-31T11:43:00",
-    "first_due_date": "2025-09-07",
-    "final_due_date": "2026-08-23"
+    "disbursement_date": "2025-08-31T11:43:00Z",
+    "first_due_date": "2025-09-07T00:00:00Z",
+    "final_due_date": "2026-08-23T00:00:00Z"
   }
 }
 ```
 **Business Logic**:
-1. Validate loan parameters (amounts, installment_unit, number_of_installments)
-2. Generate unique loan_id
-4. Calculate due dates based on installment_unit
-5. Create records in `disbursement_details` and `loan_summaries`
-6. Generate payment schedules in `payment_schedule` table with outstanding_amount tracking
-7. Set initial outstanding_amount to (principal_amount + interest_amount)
+1. Validate loan parameters (amounts, interest_rate, installment_unit, number_of_installments)
+2. Generate unique loan_id with "loan_" prefix
+3. Calculate interest_amount = principal_amount * interest_rate
+4. Calculate installment_amount = (principal_amount + interest_amount) / number_of_installments
+5. Calculate due dates based on installment_unit (weekly/monthly)
+6. Create records in `disbursement_details` and `loan_summaries`
+7. Generate payment schedules in `payment_schedules` table
+8. Set initial outstanding_amount to (principal_amount + interest_amount)
+9. All financial calculations use decimal precision to avoid floating-point errors
 
 ### 2. Repayment API
 **Endpoint**: `POST /v1/repayment`
@@ -374,16 +360,20 @@ CREATE INDEX idx_payment_schedule_histories_created_at ON payment_schedule_histo
 
 **Business Logic**:
 1. Validate loan exists in billing system
-2. Get all overdue/pending installments for the loan (ordered by due date)
-3. Calculate total required amount for all overdue installments
-4. Validate payment amount equals required amount exactly
-5. If valid:
-   - Update `payment_schedule` records (mark as PAID)
-   - Update outstanding_amount in both `payment_schedule` and `loan_summaries`
-   - Create history records in `payment_schedule_history`
-6. Each installment in `payment_schedule` tracks its own outstanding amount.
-7. Update status from `PENDING` to `PAID` for all the paid installments.
-8. If all installment statuses are marked as `PAID`, the loan summary status will be  updated to `PAID`
+2. Get overdue installments (installment_due_date < NOW() AND status = 'PENDING')
+3. If overdue installments exist:
+   - Customer must pay ALL overdue installments with exact total amount
+   - Calculate required_amount = sum of all overdue installment amounts
+4. If no overdue installments:
+   - Customer can pay the next single pending installment with exact amount
+   - Get next pending installment (status = 'PENDING', earliest due date)
+5. Validate payment amount equals required amount exactly
+6. If valid:
+   - Update `payment_schedules` records (mark as PAID, set installment_paid = installment_amount)
+   - Update outstanding_amount in `loan_summaries`
+   - Create history records in `payment_schedule_histories`
+7. If all installment statuses are marked as `PAID`, the loan summary status will be updated to `PAID`
+8. Exact payment enforcement: no partial payments allowed
 
 ### Get Outstanding Balance
 **Endpoint**: `GET /v1/loans/{loan_id}/outstanding`
@@ -438,7 +428,7 @@ CREATE INDEX idx_payment_schedule_histories_created_at ON payment_schedule_histo
   "status": "success",
   "data": {
     "loan_id": "loan_123456789",
-    "loan_summaries": {
+    "loan_summary": {
       "installment_unit": "week",
       "total_installments": 50,
       "installment_amount": 110000.00,
@@ -448,19 +438,19 @@ CREATE INDEX idx_payment_schedule_histories_created_at ON payment_schedule_histo
     "schedule": [
       {
         "installment_number": 1,
-        "due_date": "2025-09-07",
+        "due_date": "2025-09-07T00:00:00Z",
         "installment_amount": 110000.00,
-        "outstanding_amount": 5390000.00,
+        "installment_paid": 110000.00,
         "status": "PAID",
-        "paid_date": "2025-09-07",
+        "paid_date": "2025-09-07T10:30:00Z"
       },
       {
         "installment_number": 2,
-        "due_date": "2025-09-14",
+        "due_date": "2025-09-14T00:00:00Z",
         "installment_amount": 110000.00,
-        "outstanding_amount": 5280000.00,
+        "installment_paid": 0.00,
         "status": "PENDING",
-        "paid_date": null,
+        "paid_date": null
        }
     ]
   }
