@@ -89,7 +89,6 @@ erDiagram
         VARCHAR status
         CHAR currency
         INT dpd
-        VARCHAR collectability
         TIMESTAMP created_at
         VARCHAR created_by
         TIMESTAMP updated_at
@@ -117,7 +116,6 @@ erDiagram
         VARCHAR status
         CHAR currency
         INT dpd
-        VARCHAR collectability
         TIMESTAMP created_at
         VARCHAR created_by
     }
@@ -183,8 +181,7 @@ CREATE TABLE loan_summary (
     installment_amount DECIMAL(15,2) NOT NULL,
     effective_interest_rate DECIMAL(5,4) NOT NULL,
     dpd INT DEFAULT 0,
-    collectability VARCHAR(100) DEFAULT 'CURRENT',
-    status VARCHAR(100) NOT NULL,
+    status VARCHAR(100) NOT NULL, -- 'PENDING', 'PAID' and 'DELINQUENT'
     loan_start_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(255),
@@ -210,17 +207,10 @@ CREATE TABLE payment_schedule (
     installment_amount DECIMAL(15,2) NOT NULL,
     installment_due_date DATE NOT NULL,
     outstanding_amount DECIMAL(15,2) NOT NULL,
-    principal_amount DECIMAL(15,2) NOT NULL,
-    principal_paid DECIMAL(15,2) DEFAULT 0.00,
-    principal_written_off DECIMAL(15,2) DEFAULT 0.00,
-    interest_amount DECIMAL(15,2) NOT NULL,
-    interest_accrued DECIMAL(15,2) DEFAULT 0.00,
-    interest_paid DECIMAL(15,2) DEFAULT 0.00,
-    interest_waived_off DECIMAL(15,2) DEFAULT 0.00,
-    status VARCHAR(100) DEFAULT 'PENDING',
+    outstanding_paid DECIMAL(15,2) NOT NULL,
+    status VARCHAR(100) DEFAULT 'PENDING', -- 'PENDING' or 'PAID'
     currency CHAR(3) DEFAULT 'IDR',
     dpd INT DEFAULT 0,
-    collectability VARCHAR(100) DEFAULT 'CURRENT',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(255),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -249,17 +239,9 @@ CREATE TABLE payment_schedule_history (
     installment_amount DECIMAL(15,2) NOT NULL,
     installment_due_date DATE NOT NULL,
     outstanding_amount DECIMAL(15,2) NOT NULL,
-    principal_amount DECIMAL(15,2) NOT NULL,
-    principal_paid DECIMAL(15,2) DEFAULT 0.00,
-    principal_written_off DECIMAL(15,2) DEFAULT 0.00,
-    interest_amount DECIMAL(15,2) NOT NULL,
-    interest_accrued DECIMAL(15,2) DEFAULT 0.00,
-    interest_paid DECIMAL(15,2) DEFAULT 0.00,
-    interest_waived_off DECIMAL(15,2) DEFAULT 0.00,
     status VARCHAR(100),
     currency CHAR(3) DEFAULT 'IDR',
     dpd INT DEFAULT 0,
-    collectability VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(255),
     FOREIGN KEY (schedule_id) REFERENCES payment_schedule(id),
@@ -347,14 +329,8 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
    - Update outstanding_amount in both `payment_schedule` and `loan_summary`
    - Create history records in `payment_schedule_history`
 6. Each installment in `payment_schedule` tracks its own outstanding amount.
-
-## Outstanding Amount Tracking
-### Payment Schedule Outstanding Amount Logic
-Each installment in `payment_schedule` tracks its own outstanding amount.
-### Outstanding Amount Updates on Payment
-Every repayment will automatically
-
-## Query APIs (Updated)
+7. Update status from `PENDING` to `PAID` for all the paid installments.
+8. If all installment statuses are marked as `PAID`, the loan summary status will be  updated to `PAID`
 
 ### Get Outstanding Balance
 **Endpoint**: `GET /v1/loans/{loan_id}/outstanding`
@@ -393,7 +369,6 @@ Every repayment will automatically
     "customer_id": "12312312",
     "is_delinquent": true,
     "dpd": 15,
-    "collectability": "SPECIAL_MENTION",
     "installment_unit": "week",
     "overdue_installments": 2,
     "overdue_amount": 220000.00,
@@ -437,10 +412,11 @@ Every repayment will automatically
         "status": "PENDING",
         "paid_date": null,
         "dpd": 3
-      }
+        kj}
     ]
   }
 }
 ```
 
 ## EOD Scheduler Implementation
+At the end of each day, a scheduler runs to determine the status of active loans. For any loan repayment with a PENDING status that has passed its due date, the `DPD (Days Past Due)` will be incremented. If a loan has two or more overdue repayments (DPD > 0) with a `PENDING` status, it will be marked as a `delinquent` loan by updating the loan_summary status as `DELINQUENT`"
