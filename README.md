@@ -17,9 +17,7 @@ A comprehensive billing system for managing dynamic loan products with flexible 
 - Payments are applied to oldest outstanding installments first
 
 ### Delinquency Rules
-- DPD (Days Past Due) calculated daily via EOD scheduler
-- DPD > 0 indicates overdue payments
-- Collectability classification based on DPD thresholds
+- 2 Overdue repayments
 
 ## Database Design (ERD)
 ```mermaid
@@ -35,7 +33,7 @@ erDiagram
         TIMESTAMP deleted_at
     }
 
-    disbursement_detail {
+    disbursement_details {
         BIGINT id PK
         VARCHAR loan_id UK
         VARCHAR customer_id
@@ -50,7 +48,7 @@ erDiagram
         TIMESTAMP deleted_at
     }
 
-    loan_summary {
+    loan_summaries {
         BIGINT id PK
         VARCHAR loan_id UK
         VARCHAR customer_id
@@ -120,12 +118,12 @@ erDiagram
         VARCHAR created_by
     }
 
-    loan_summary ||--|| disbursement_detail : "loan_id"
-    payment_schedule }o--|| disbursement_detail : "loan_id"
+    loan_summaries ||--|| disbursement_details : "loan_id"
+    payment_schedule }o--|| disbursement_details : "loan_id"
     payment_schedule_history }o--|| payment_schedule : "schedule_id"
-    payment_schedule_history }o--|| disbursement_detail : "loan_id"
-    users ||--o{ disbursement_detail : "customer_id (optional)"
-    users ||--o{ loan_summary : "customer_id (optional)"
+    payment_schedule_history }o--|| disbursement_details : "loan_id"
+    users ||--o{ disbursement_details : "customer_id (optional)"
+    users ||--o{ loan_summaries : "customer_id (optional)"
 ```
 ## Database Schema
 ### 1. Users Table ( For Reference Only)
@@ -147,7 +145,7 @@ CREATE INDEX idx_users_customer_id ON users (customer_id);
 
 ### 2. Disbursement Detail Table
 ```sql
-CREATE TABLE disbursement_detail (
+CREATE TABLE disbursement_details (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     loan_id VARCHAR(36) UNIQUE NOT NULL,
     customer_id VARCHAR(36) NOT NULL,
@@ -162,14 +160,14 @@ CREATE TABLE disbursement_detail (
     deleted_at TIMESTAMP NULL
 );
 
-CREATE INDEX idx_disbursement_detail_created_at ON disbursement_detail (created_at);
-CREATE INDEX idx_disbursement_detail_status ON disbursement_detail (status);
-CREATE INDEX idx_disbursement_detail_customer_id ON disbursement_detail (customer_id);
+CREATE INDEX idx_disbursement_details_created_at ON disbursement_details (created_at);
+CREATE INDEX idx_disbursement_details_status ON disbursement_details (status);
+CREATE INDEX idx_disbursement_details_customer_id ON disbursement_details (customer_id);
 ```
 
 ### 3. Loan Summary Table
 ```sql
-CREATE TABLE loan_summary (
+CREATE TABLE loan_summaries (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     loan_id VARCHAR(36) UNIQUE NOT NULL,
     customer_id VARCHAR(36) NOT NULL,
@@ -188,19 +186,19 @@ CREATE TABLE loan_summary (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by VARCHAR(255),
     deleted_at TIMESTAMP NULL,
-    FOREIGN KEY (loan_id) REFERENCES disbursement_detail(loan_id)
+    FOREIGN KEY (loan_id) REFERENCES disbursement_details(loan_id)
 );
 
-CREATE INDEX idx_loan_summary_created_at ON loan_summary (created_at);
-CREATE INDEX idx_loan_summary_customer_id ON loan_summary (customer_id);
-CREATE INDEX idx_loan_summary_status ON loan_summary (status);
-CREATE INDEX idx_loan_summary_dpd ON loan_summary (dpd);
-CREATE INDEX idx_loan_summary_installment_unit ON loan_summary (installment_unit);
+CREATE INDEX idx_loan_summaries_created_at ON loan_summaries (created_at);
+CREATE INDEX idx_loan_summaries_customer_id ON loan_summaries (customer_id);
+CREATE INDEX idx_loan_summaries_status ON loan_summaries (status);
+CREATE INDEX idx_loan_summaries_dpd ON loan_summaries (dpd);
+CREATE INDEX idx_loan_summaries_installment_unit ON loan_summaries (installment_unit);
 ```
 
 ### 4. Payment Schedule Table
 ```sql
-CREATE TABLE payment_schedule (
+CREATE TABLE payment_schedules (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     loan_id VARCHAR(36) NOT NULL,
     installment_number INT NOT NULL,
@@ -210,27 +208,25 @@ CREATE TABLE payment_schedule (
     outstanding_paid DECIMAL(15,2) NOT NULL,
     status VARCHAR(100) DEFAULT 'PENDING', -- 'PENDING' or 'PAID'
     currency CHAR(3) DEFAULT 'IDR',
-    dpd INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(255),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by VARCHAR(255),
     deleted_at TIMESTAMP NULL,
     deleted_by VARCHAR(255),
-    FOREIGN KEY (loan_id) REFERENCES disbursement_detail(loan_id)
+    FOREIGN KEY (loan_id) REFERENCES disbursement_details(loan_id)
 );
 
-CREATE INDEX idx_payment_schedule_loan_id ON payment_schedule (loan_id);
-CREATE INDEX idx_payment_schedule_due_date ON payment_schedule (installment_due_date);
-CREATE INDEX idx_payment_schedule_status ON payment_schedule (status);
-CREATE INDEX idx_payment_schedule_dpd ON payment_schedule (dpd);
-CREATE INDEX idx_payment_schedule_outstanding ON payment_schedule (outstanding_amount);
-CREATE UNIQUE INDEX idx_payment_schedule_loan_installment ON payment_schedule (loan_id, installment_number);
+CREATE INDEX idx_payment_schedules_loan_id ON payment_schedules (loan_id);
+CREATE INDEX idx_payment_schedules_due_date ON payment_schedules (installment_due_date);
+CREATE INDEX idx_payment_schedules_status ON payment_schedules (status);
+CREATE INDEX idx_payment_schedules_outstanding ON payment_schedules (outstanding_amount);
+CREATE UNIQUE INDEX idx_payment_schedules_loan_installment ON payment_schedules (loan_id, installment_number);
 ```
 
 ### 5. Payment Schedule History Table
 ```sql
-CREATE TABLE payment_schedule_history (
+CREATE TABLE payment_schedule_histories (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     schedule_id BIGINT NOT NULL,
     loan_id VARCHAR(36) NOT NULL,
@@ -245,12 +241,12 @@ CREATE TABLE payment_schedule_history (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(255),
     FOREIGN KEY (schedule_id) REFERENCES payment_schedule(id),
-    FOREIGN KEY (loan_id) REFERENCES disbursement_detail(loan_id)
+    FOREIGN KEY (loan_id) REFERENCES disbursement_details(loan_id)
 );
 
-CREATE INDEX idx_payment_schedule_history_schedule_id ON payment_schedule_history (schedule_id);
-CREATE INDEX idx_payment_schedule_history_loan_id ON payment_schedule_history (loan_id);
-CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history (created_at);
+CREATE INDEX idx_payment_schedule_histories_schedule_id ON payment_schedule_histories (schedule_id);
+CREATE INDEX idx_payment_schedule_histories_loan_id ON payment_schedule_histories (loan_id);
+CREATE INDEX idx_payment_schedule_histories_created_at ON payment_schedule_histories (created_at);
 ```
 
 ## API Specifications
@@ -289,7 +285,7 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
 1. Validate loan parameters (amounts, installment_unit, number_of_installments)
 2. Generate unique loan_id
 4. Calculate due dates based on installment_unit
-5. Create records in `disbursement_detail` and `loan_summary`
+5. Create records in `disbursement_details` and `loan_summaries`
 6. Generate payment schedules in `payment_schedule` table with outstanding_amount tracking
 7. Set initial outstanding_amount to (principal_amount + interest_amount)
 
@@ -326,7 +322,7 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
 4. Validate payment amount equals required amount exactly
 5. If valid:
    - Update `payment_schedule` records (mark as PAID)
-   - Update outstanding_amount in both `payment_schedule` and `loan_summary`
+   - Update outstanding_amount in both `payment_schedule` and `loan_summaries`
    - Create history records in `payment_schedule_history`
 6. Each installment in `payment_schedule` tracks its own outstanding amount.
 7. Update status from `PENDING` to `PAID` for all the paid installments.
@@ -349,7 +345,6 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
     },
     "outstanding_amount": 3300000.00,
     "overdue_amount": 220000.00,
-    "current_dpd": 5,
     "overdue_installments": 2,
     "paid_installments": 20,
     "remaining_installments": 30
@@ -368,7 +363,6 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
     "loan_id": "loan_123456789",
     "customer_id": "12312312",
     "is_delinquent": true,
-    "dpd": 15,
     "installment_unit": "week",
     "overdue_installments": 2,
     "overdue_amount": 220000.00,
@@ -387,7 +381,7 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
   "status": "success",
   "data": {
     "loan_id": "loan_123456789",
-    "loan_summary": {
+    "loan_summaries": {
       "installment_unit": "week",
       "total_installments": 50,
       "installment_amount": 110000.00,
@@ -402,7 +396,6 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
         "outstanding_amount": 5390000.00,
         "status": "PAID",
         "paid_date": "2025-09-07",
-        "dpd": 0
       },
       {
         "installment_number": 2,
@@ -411,12 +404,8 @@ CREATE INDEX idx_payment_schedule_history_created_at ON payment_schedule_history
         "outstanding_amount": 5280000.00,
         "status": "PENDING",
         "paid_date": null,
-        "dpd": 3
-        kj}
+       }
     ]
   }
 }
 ```
-
-## EOD Scheduler Implementation
-At the end of each day, a scheduler runs to determine the status of active loans. For any loan repayment with a PENDING status that has passed its due date, the `DPD (Days Past Due)` will be incremented. If a loan has two or more overdue repayments (DPD > 0) with a `PENDING` status, it will be marked as a `delinquent` loan by updating the loan_summary status as `DELINQUENT`"

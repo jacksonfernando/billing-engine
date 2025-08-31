@@ -1,0 +1,24 @@
+services:
+  backend:
+   build: ./backend
+   depends_on:
+       - mysql_db
+   ports:
+       - "9090:9090"
+  mysql_db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: paddle_club
+      MYSQL_USER: paddle_admin
+      MYSQL_PASSWORD: paddle_password
+      MYSQL_ROOT_PASSWORD: root_paddle
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_volume:/var/lib/mysql
+
+volumes:
+  mysql_volume:
+
+

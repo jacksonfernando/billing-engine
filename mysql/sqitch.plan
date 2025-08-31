@@ -1,0 +1,4 @@
+%syntax-version=1.0.0
+%project=billing_engine
+
+0001-create-all-tables 2025-04-21T16:57:38Z tronic <tronic@tronic> # create all tables for billing engine
