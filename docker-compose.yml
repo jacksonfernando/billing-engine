@@ -1,24 +1,54 @@
 services:
-  backend:
-   build: ./backend
-   depends_on:
-       - mysql_db
-   ports:
-       - "9090:9090"
   mysql_db:
     image: mysql:8.0
     restart: always
     environment:
-      MYSQL_DATABASE: paddle_club
-      MYSQL_USER: paddle_admin
-      MYSQL_PASSWORD: paddle_password
-      MYSQL_ROOT_PASSWORD: root_paddle
+      MYSQL_ROOT_PASSWORD: root_billing
+      MYSQL_DATABASE: billing_engine
+      MYSQL_USER: billing_admin
+      MYSQL_PASSWORD: billing_password
     ports:
       - "3306:3306"
     volumes:
       - mysql_volume:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_billing"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 30s
+    networks:
+      - billing_network
+
+  billing_engine:
+    build: .
+    restart: always
+    environment:
+      - DB_HOST=mysql_db
+      - DB_PORT=3306
+      - DB_NAME=billing_engine
+      - DB_USER=billing_admin
+      - DB_PASSWORD=billing_password
+      - APP_PORT=9006
+    ports:
+      - "9006:9006"
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    networks:
+      - billing_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9006/health", "||", "exit", "1"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 40s
 
 volumes:
   mysql_volume:
 
-
+networks:
+  billing_network:
+    driver: bridge

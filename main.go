@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	disbursementHTTPHandler "billing-engine/disbursement/handler/http"
@@ -33,13 +34,29 @@ func main() {
 	}
 	time.Local = loc
 
-	viper.SetConfigFile(".env")
+	// Load configuration from .env file or environment variables
 	var configuration global.Configuration
+
+	// Try to read from .env file first
+	viper.SetConfigFile(".env")
 	if err := viper.ReadInConfig(); err != nil {
-		panic("Failed to read .env file")
+		// If .env file doesn't exist, use environment variables
+		fmt.Println("No .env file found, using environment variables")
 	}
+
+	// Set defaults and read from environment variables
+	viper.AutomaticEnv()
+	viper.SetDefault("host_port", getEnv("APP_PORT", "9006"))
+	viper.SetDefault("db_host", getEnv("DB_HOST", "localhost"))
+	viper.SetDefault("db_port", getEnv("DB_PORT", "3306"))
+	viper.SetDefault("db_name", getEnv("DB_NAME", "billing_engine"))
+	viper.SetDefault("db_user", getEnv("DB_USER", "billing_admin"))
+	viper.SetDefault("db_pass", getEnv("DB_PASSWORD", "billing_password"))
+	viper.SetDefault("private_jwt_access_token_secret", getEnv("JWT_SECRET", "default-secret-key"))
+	viper.SetDefault("private_jwt_refresh_token_secret", getEnv("JWT_REFRESH_SECRET", "default-refresh-secret-key"))
+
 	if err := viper.Unmarshal(&configuration); err != nil {
-		panic("Unable to decode into struct")
+		panic("Unable to decode configuration into struct")
 	}
 
 	dsn := fmt.Sprintf(
@@ -80,4 +97,12 @@ func main() {
 	loanQueryHTTPHandler.NewLoanQueryHandler(newEcho, loanQuerySvc, middlewares)
 
 	newEcho.Logger.Fatal(newEcho.Start(fmt.Sprintf(":%s", configuration.HostPort)))
+}
+
+// getEnv gets environment variable with fallback to default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }

@@ -2,6 +2,63 @@
 ## Overview
 A comprehensive billing system for managing dynamic loan products with flexible repayment schedules. The system supports configurable loan terms, payment frequencies (weekly/monthly), and automated delinquency tracking through schedulers. **This service focuses purely on billing operations and does not perform customer validation - it processes loan requests as received from downstream services.**
 
+## Quick Start
+
+### Prerequisites
+- Go 1.21 or later
+- Docker and Docker Compose
+- Make (optional, but recommended)
+
+### Setup with Makefile (Recommended)
+```bash
+# Complete setup - provisions all resources, database, and starts services
+make setup
+
+# Check status of all services
+make status
+
+# Run tests
+make test
+```
+
+### Manual Setup
+```bash
+# 1. Start all services (MySQL + Billing Engine)
+docker compose up -d --build
+
+# 2. Check status
+docker compose ps
+
+# 3. Test API
+curl http://localhost:9006/health
+```
+
+### Available Make Commands
+```bash
+make help                 # Show all available commands
+make setup               # Complete setup (recommended for first time)
+make dev-setup           # Setup development environment
+make docker-up           # Start Docker containers
+make docker-down         # Stop Docker containers
+make db-setup            # Setup database and tables
+make db-reset            # Reset database
+make build               # Build the application
+make run                 # Run the application
+make test                # Run all tests
+make test-coverage       # Run tests with coverage
+make clean               # Clean up build artifacts
+make status              # Show status of all services
+```
+
+### Configuration
+The system uses the following default configuration:
+- **Database**: MySQL 8.0 on port 3306
+- **Application**: Runs on port 9006
+- **Database Name**: billing_engine
+- **Database User**: billing_admin
+
+You can override these by setting environment variables before running make commands.
+
 ## Business Rules
 ### Loan Structure (Dynamic)
 - **Principal Amount**: Configurable per loan (amount disbursed to customer)
